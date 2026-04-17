@@ -225,15 +225,13 @@ let QBANK = [];
 
 async function cargarBanco() {
   try {
-    await new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = CONFIG.BANCO_URL + '?v=' + Date.now();
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
+    const res = await fetch(CONFIG.BANCO_URL + '?v=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const code = await res.text();
 
-    const banco = window.BANCO_MODULO_C;
+    const fn = new Function(code + '\n return BANCO_MODULO_C;');
+    const banco = fn();
+
     if (!banco || !Array.isArray(banco) || banco.length === 0) {
       throw new Error('Banco vacío o nombre de variable incorrecto.');
     }
