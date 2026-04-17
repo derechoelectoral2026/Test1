@@ -250,21 +250,16 @@ let TOTAL = 0;
 
 async function cargarBanco() {
   try {
-    // Inyecta el script del banco y espera a que BANCO_MODULO_A esté disponible
-    await new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = CONFIG.BANCO_URL + '?v=' + Date.now(); // cache-bust
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
+    const res = await fetch(CONFIG.BANCO_URL + '?v=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const code = await res.text();
 
-    // El banco se carga como variable global BANCO_MODULO_A
-    // Si el banco usa otro nombre, cámbialo aquí:
-    const banco = window.BANCO_MODULO_A;
+    // Ejecuta el código del banco y extrae el array de preguntas
+    const fn = new Function(code + '\n return BANCO_MODULO_A;');
+    const banco = fn();
 
     if (!banco || !Array.isArray(banco) || banco.length === 0) {
-      throw new Error('El banco está vacío o tiene un nombre de variable incorrecto.');
+      throw new Error('Banco vacío o nombre de variable incorrecto.');
     }
 
     Q.push(...banco);
