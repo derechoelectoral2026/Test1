@@ -10,10 +10,11 @@
 ════════════════════════════════════════════════════════ -->
 <script>
   const CONFIG = {
-    BANCO_URL:  'https://raw.githubusercontent.com/derechoelectoral2026/Bancos-Spen/main/banco-modulo-c.js',
-    MODULO:     'Módulo C — Derecho Electoral',
-    SUBTITULO:  'Marco jurídico electoral mexicano · Diagnóstico',
-    TIEMPO_MIN: 50
+    BANCO_URL:   'https://raw.githubusercontent.com/derechoelectoral2026/Bancos-Spen/main/banco-modulo-c.js',
+    MODULO:      'Módulo C — Derecho Electoral',
+    SUBTITULO:   'Marco jurídico electoral mexicano · Diagnóstico',
+    TIEMPO_MIN:  50,
+    N_PREGUNTAS: 40   // ← preguntas a seleccionar del banco (cambia este número)
   };
 </script>
 
@@ -261,7 +262,7 @@ function inicializarSimulacro() {
   const subs = Object.keys(subCounts).sort();
 
   document.getElementById('infoGrid').innerHTML = `
-    <div class="info-card"><div class="num">${QBANK.length}</div><div class="lbl">Preguntas</div></div>
+    <div class="info-card"><div class="num">${CONFIG.N_PREGUNTAS}</div><div class="lbl">Preguntas</div></div>
     <div class="info-card"><div class="num">${CONFIG.TIEMPO_MIN}</div><div class="lbl">Minutos</div></div>
     <div class="info-card"><div class="num">${subs.length}</div><div class="lbl">Subáreas</div></div>`;
 
@@ -280,7 +281,7 @@ function inicializarSimulacro() {
   document.getElementById('topicSections').innerHTML = topicHtml;
 
   document.getElementById('startTitle').textContent = '⚖️ ' + CONFIG.MODULO;
-  document.getElementById('navTotal').textContent = QBANK.length;
+  document.getElementById('navTotal').textContent = CONFIG.N_PREGUNTAS;
   document.getElementById('timer').textContent = CONFIG.TIEMPO_MIN + ':00';
 
   document.getElementById('loadingScreen').classList.add('hidden');
@@ -315,10 +316,28 @@ function shuffle(arr){ const a=[...arr]; for(let i=a.length-1;i>0;i--){ const j=
 //  INICIO
 // ═══════════════════════════════════════════════════════════
 function startExam(){
+  // ── Selección proporcional de N_PREGUNTAS del banco ──
+  const N = CONFIG.N_PREGUNTAS;
   const byArea = {};
   QBANK.forEach(q => { if(!byArea[q.sa]) byArea[q.sa]=[]; byArea[q.sa].push(q); });
   Object.keys(byArea).forEach(k => byArea[k] = shuffle(byArea[k]));
-  Q = shuffle(Object.keys(byArea).sort().flatMap(k => byArea[k]));
+
+  const saKeys = Object.keys(byArea).sort();
+  const totalBank = QBANK.length;
+  const quotas = {};
+  let assigned = 0;
+  saKeys.forEach(k => {
+    quotas[k] = Math.floor((byArea[k].length / totalBank) * N);
+    assigned += quotas[k];
+  });
+  const residuals = saKeys
+    .map(k => ({ k, r: (byArea[k].length / totalBank) * N - quotas[k] }))
+    .sort((a, b) => b.r - a.r);
+  let rem = N - assigned;
+  for (let i = 0; rem > 0; i++, rem--) quotas[residuals[i % saKeys.length].k]++;
+  saKeys.forEach(k => { quotas[k] = Math.min(quotas[k], byArea[k].length); });
+
+  Q = shuffle(saKeys.flatMap(k => byArea[k].slice(0, quotas[k])));
 
   answers  = new Array(Q.length).fill(null);
   revealed = new Array(Q.length).fill(false);
