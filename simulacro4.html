@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulacro INE – Módulo D · v4 (Aleatorio)</title>
+
+<!-- ═══════════════════════════════════════════════════════
+  CONFIGURACIÓN DEL SIMULACRO
+  Solo cambia estas líneas para ajustar el simulacro:
+    BANCO_URL  → URL raw del archivo JS en GitHub
+    MODULO     → Nombre visible del módulo
+    TIEMPO_MIN → Duración en minutos
+    N_PREGUNTAS → Preguntas que aparecen (el banco puede tener más)
+════════════════════════════════════════════════════════ -->
+<script>
+  const CONFIG = {
+    BANCO_URL:    'https://raw.githubusercontent.com/derechoelectoral2026/Bancos-Spen/main/banco-modulo-dvoe.js',
+    MODULO:       'Módulo D — Vocalía de Organización Electoral',
+    SUBTITULO:    'Conocimientos técnicos del cargo · Diagnóstico',
+    TIEMPO_MIN:   50,
+    N_PREGUNTAS:  40   // ← el banco tiene 50; el examen muestra 40
+  };
+</script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0fff4; color: #222; min-height: 100vh; }
+  .header { background: linear-gradient(135deg, #1b5e20, #43a047); color: white; padding: 18px 24px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+  .header-logo { font-size: 1.8rem; }
+  .header h1 { font-size: 1.1rem; font-weight: 700; }
+  .header p { font-size: 0.8rem; opacity: 0.85; margin-top: 2px; }
+  .header-right { margin-left: auto; text-align: right; }
+  .timer { font-size: 1.4rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+  .timer.warning { color: #ffe082; }
+  .timer.danger { color: #ff6b6b; animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.5} }
+  .progress-wrap { background: #c8e6c9; height: 5px; }
+  .progress-bar { height: 5px; background: #fff; transition: width 0.4s; }
+  .main { max-width: 760px; margin: 0 auto; padding: 20px 16px 90px; }
+
+  .start-screen { background: white; border-radius: 16px; padding: 36px; text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-top: 30px; }
+  .start-screen h2 { font-size: 1.4rem; color: #1b5e20; margin-bottom: 10px; }
+  .info-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin: 20px 0; }
+  .info-card { background: #e8f5e9; border-radius: 12px; padding: 14px; }
+  .info-card .num { font-size: 1.7rem; font-weight: 800; color: #1b5e20; }
+  .info-card .lbl { font-size: 0.78rem; color: #666; margin-top: 2px; }
+  .topic-section { text-align: left; margin: 14px 0; }
+  .topic-section-title { font-size: 0.76rem; font-weight: 800; color: #1b5e20; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; padding-left: 4px; border-left: 3px solid #43a047; padding-left: 8px; }
+  .topic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 12px; }
+  .topic-pill { background: #e8f5e9; border-radius: 8px; padding: 7px 11px; font-size: 0.79rem; color: #1b5e20; display: flex; justify-content: space-between; gap: 8px; }
+  .topic-pill .cnt { font-weight: 800; flex-shrink: 0; }
+
+  .question-card { background: white; border-radius: 14px; padding: 24px; box-shadow: 0 2px 10px rgba(0,0,0,0.07); margin-bottom: 16px; }
+  .q-meta { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 6px; }
+  .q-badge { font-size: 0.72rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; }
+  .q-num { color: #aaa; font-size: 0.82rem; }
+  .passage { background: #f0fff4; border-left: 4px solid #43a047; padding: 14px; border-radius: 0 8px 8px 0; margin-bottom: 16px; font-size: 0.9rem; line-height: 1.7; }
+  .passage-label { font-size: 0.72rem; font-weight: 700; color: #1b5e20; text-transform: uppercase; margin-bottom: 6px; }
+  .question-text { font-size: 0.97rem; font-weight: 600; line-height: 1.5; margin-bottom: 18px; }
+  .options { display: flex; flex-direction: column; gap: 9px; }
+  .option { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 2px solid #e0e0e0; border-radius: 10px; cursor: pointer; transition: all 0.18s; font-size: 0.9rem; line-height: 1.4; }
+  .option:hover:not(.disabled) { border-color: #43a047; background: #e8f5e933; }
+  .option.selected { border-color: #43a047; background: #e8f5e955; }
+  .option.correct { border-color: #4caf50; background: #e8f5e9; }
+  .option.incorrect { border-color: #f44336; background: #ffebee; }
+  .option.disabled { cursor: default; }
+  .option-letter { width: 26px; height: 26px; border-radius: 50%; background: #eee; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.78rem; flex-shrink: 0; }
+  .option.selected .option-letter { background: #43a047; color: white; }
+  .option.correct .option-letter { background: #4caf50; color: white; }
+  .option.incorrect .option-letter { background: #f44336; color: white; }
+  .explanation { margin-top: 14px; padding: 12px 14px; background: #f0fff4; border-radius: 10px; border-left: 4px solid #43a047; font-size: 0.85rem; line-height: 1.6; display: none; }
+  .explanation.show { display: block; }
+
+  .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid #e0e0e0; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center; gap: 10px; box-shadow: 0 -2px 10px rgba(0,0,0,0.06); }
+  .nav-info { font-size: 0.82rem; color: #888; }
+  .nav-info span { color: #1b5e20; font-weight: 700; }
+  .btn { padding: 11px 22px; border-radius: 10px; border: none; font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: all 0.18s; }
+  .btn-primary { background: linear-gradient(135deg,#1b5e20,#43a047); color: white; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-secondary { background: #f0f0f0; color: #555; }
+  .btn-secondary:hover { background: #e0e0e0; }
+  .btn-lg { padding: 15px 36px; font-size: 1rem; border-radius: 12px; }
+
+  .results-screen { background: white; border-radius: 16px; padding: 36px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-top: 20px; text-align: center; }
+  .score-circle { width: 130px; height: 130px; border-radius: 50%; margin: 0 auto 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 2rem; font-weight: 900; color: white; }
+  .score-sub { font-size: 0.72rem; font-weight: 500; opacity: 0.85; }
+  .score-good { background: linear-gradient(135deg,#43a047,#66bb6a); }
+  .score-mid { background: linear-gradient(135deg,#f57c00,#ffa726); }
+  .score-low { background: linear-gradient(135deg,#c62828,#ef5350); }
+  .stats-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin: 20px 0; }
+  .stat-card { background: #f9f9f9; border-radius: 10px; padding: 14px; }
+  .stat-card .n { font-size: 1.5rem; font-weight: 800; }
+  .stat-card .l { font-size: 0.75rem; color: #888; margin-top: 2px; }
+  .stat-correct .n { color: #43a047; }
+  .stat-wrong .n { color: #e53935; }
+  .stat-skip .n { color: #888; }
+  .area-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.85rem; }
+  .area-name { flex: 1; color: #444; }
+  .area-bar-wrap { flex: 2; background: #eee; border-radius: 4px; height: 7px; }
+  .area-bar { height: 7px; border-radius: 4px; }
+  .area-pct { width: 34px; text-align: right; font-weight: 700; font-size: 0.82rem; }
+  .weak-banner { background: linear-gradient(135deg,#1b5e20,#43a047); color: white; border-radius: 12px; padding: 14px 18px; margin: 16px 0; text-align: left; }
+  .weak-banner h4 { margin-bottom: 6px; }
+  .weak-banner p { font-size: 0.83rem; opacity: 0.9; margin-bottom: 8px; }
+  .weak-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .weak-tag { background: rgba(255,255,255,0.25); border-radius: 6px; padding: 3px 9px; font-size: 0.78rem; font-weight: 700; }
+  .hidden { display: none !important; }
+  @media(max-width:500px){ .info-grid,.stats-grid{grid-template-columns:1fr 1fr} .topic-grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="header-logo">📂</div>
+  <div>
+    <h1>Simulacro INE – Módulo D · v4 <span style="font-size:.75em;opacity:.85">🔀 Aleatorio</span></h1>
+    <p>Conocimientos técnicos · Vocalía de Organización Electoral</p>
+  </div>
+  <div class="header-right">
+    <div class="timer" id="timer">50:00</div>
+    <div style="font-size:0.68rem;opacity:0.7;margin-top:2px">tiempo restante</div>
+  </div>
+</div>
+<div class="progress-wrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+<div class="main">
+  <div id="loadingScreen" style="text-align:center;padding:60px 20px">
+    <div style="font-size:2rem;margin-bottom:16px">⏳</div>
+    <p style="color:#1b5e20;font-weight:700;font-size:1rem">Cargando banco de preguntas...</p>
+    <p style="color:#888;font-size:0.8rem;margin-top:6px">Conectando con GitHub</p>
+  </div>
+  <div id="errorScreen" class="hidden" style="background:white;border-radius:14px;padding:30px;text-align:center;margin-top:20px">
+    <div style="font-size:2.5rem;margin-bottom:12px">⚠️</div>
+    <h3 style="color:#c62828;margin-bottom:8px">No se pudo cargar el banco</h3>
+    <p style="color:#666;font-size:0.85rem;margin-bottom:12px">Verifica tu conexión a internet o que la URL sea correcta.</p>
+    <p style="font-size:0.78rem;color:#888;margin-bottom:16px">URL:<br><code id="errorUrl" style="word-break:break-all;color:#1b5e20"></code></p>
+    <button class="btn btn-primary" onclick="cargarBanco()">🔄 Reintentar</button>
+  </div>
+  <div class="start-screen hidden" id="startScreen">
+    <h2>📂 Módulo D — Conocimientos técnicos del cargo</h2>
+    <p style="background:#e8f5e9;border-radius:10px;padding:10px;color:#1b5e20;font-weight:600;margin-bottom:14px">🎯 Este módulo evalúa lo más operativo del puesto. ¡Es clave dominarlo! · <strong>🔀 Preguntas en orden aleatorio cada vez</strong></p>
+    <div class="info-grid">
+      <div class="info-card"><div class="num" id="infoPreguntas">40</div><div class="lbl">Preguntas</div></div>
+      <div class="info-card"><div class="num" id="infoMinutos">50</div><div class="lbl">Minutos</div></div>
+      <div class="info-card"><div class="num">5</div><div class="lbl">Áreas</div></div>
+    </div>
+    <div class="topic-section">
+      <div class="topic-section-title">🏢 1. Estructura del INE (7 preguntas)</div>
+      <div class="topic-grid">
+        <div class="topic-pill"><span>1.1 Direcciones ejecutivas</span><span class="cnt">1</span></div>
+        <div class="topic-pill"><span>1.2 Juntas locales y distritales ejecutivas</span><span class="cnt">2</span></div>
+        <div class="topic-pill"><span>1.3 Consejos locales y distritales</span><span class="cnt">4</span></div>
+      </div>
+      <div class="topic-section-title">🗓️ 2. Proceso electoral (21 preguntas)</div>
+      <div class="topic-grid">
+        <div class="topic-pill"><span>2.1 Actividades de preparación</span><span class="cnt">4</span></div>
+        <div class="topic-pill"><span>2.2 Modalidades de voto anticipado</span><span class="cnt">4</span></div>
+        <div class="topic-pill"><span>2.3 Proceso electoral del PJF</span><span class="cnt">1</span></div>
+        <div class="topic-pill"><span>2.4 Atribuciones especiales del INE</span><span class="cnt">4</span></div>
+        <div class="topic-pill"><span>2.5 Actividades del día de la jornada</span><span class="cnt">8</span></div>
+      </div>
+      <div class="topic-section-title">⚖️ 3. Justicia electoral (9 preguntas)</div>
+      <div class="topic-grid">
+        <div class="topic-pill"><span>3.1 Delitos en materia electoral</span><span class="cnt">1</span></div>
+        <div class="topic-pill"><span>3.2 Medios de impugnación</span><span class="cnt">3</span></div>
+        <div class="topic-pill"><span>3.3 Violencia política contra mujeres</span><span class="cnt">5</span></div>
+      </div>
+      <div class="topic-section-title">📦 4. Organización de la elección (9 preguntas)</div>
+      <div class="topic-grid">
+        <div class="topic-pill"><span>4.1 Acreditación de observadores</span><span class="cnt">2</span></div>
+        <div class="topic-pill"><span>4.2 Casillas electorales</span><span class="cnt">3</span></div>
+        <div class="topic-pill"><span>4.3 Recepción, almacenamiento y distribución</span><span class="cnt">4</span></div>
+      </div>
+      <div class="topic-section-title">📊 5. Resultados y declaración de validez (4 preguntas)</div>
+      <div class="topic-grid">
+        <div class="topic-pill"><span>5.1 Remisión de documentación</span><span class="cnt">1</span></div>
+        <div class="topic-pill"><span>5.2 Cómputos distritales</span><span class="cnt">3</span></div>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-lg" onclick="startExam()">Comenzar diagnóstico</button>
+  </div>
+  <div id="examScreen" class="hidden"></div>
+  <div id="resultsScreen" class="hidden"></div>
+</div>
+<div class="nav-bar hidden" id="navBar">
+  <div class="nav-info">Pregunta <span id="navCurrent">1</span> de <span id="navTotal">40</span></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn btn-secondary" id="btnPrev" onclick="prevQ()">← Anterior</button>
+    <button class="btn btn-primary" id="btnNext" onclick="nextQ()">Siguiente →</button>
+  </div>
+</div>
+<script>
+// ═══════════════════════════════════════════════════════════
+//  CARGA DINÁMICA DEL BANCO DESDE GITHUB
+// ═══════════════════════════════════════════════════════════
+let BANK = [];
+
+async function cargarBanco() {
+  try {
+    const res = await fetch(CONFIG.BANCO_URL + '?v=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const code = await res.text();
+
+    // El banco exporta la variable BANK
+    const fn = new Function(code + '\n return BANK;');
+    const banco = fn();
+
+    if (!banco || !Array.isArray(banco) || banco.length === 0) {
+      throw new Error('Banco vacío o nombre de variable incorrecto.');
+    }
+
+    BANK = banco;
+    inicializarSimulacro();
+
+  } catch (err) {
+    console.error('Error cargando banco:', err);
+    document.getElementById('loadingScreen').classList.add('hidden');
+    document.getElementById('errorScreen').classList.remove('hidden');
+    document.getElementById('errorUrl').textContent = CONFIG.BANCO_URL;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   MOTOR DEL SIMULACRO
+   N_EXAMEN = 40  ← número de preguntas que aparecen en el examen real
+══════════════════════════════════════════════════════════════════ */
+
+// TIME_LIMIT se calcula desde CONFIG
+
+let Q = [], answers = [], revealed = [], current = 0;
+let timerInterval = null, secondsLeft = CONFIG.TIEMPO_MIN * 60;
+
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function shuffleOptions(q) {
+  const idx = shuffleArray([0, 1, 2]);
+  return { ...q, o: idx.map(i => q.o[i]), c: idx.indexOf(q.c) };
+}
+
+function buildQ() {
+  const byArea = {};
+  BANK.forEach(q => { if (!byArea[q.sa]) byArea[q.sa] = []; byArea[q.sa].push(q); });
+  const keys = Object.keys(byArea).sort();
+  const total = BANK.length, N = CONFIG.N_PREGUNTAS;
+  const quotas = {};
+  let assigned = 0;
+  keys.forEach(k => { quotas[k] = Math.floor(byArea[k].length / total * N); assigned += quotas[k]; });
+  const residuals = keys.map(k => ({ k, r: byArea[k].length / total * N - quotas[k] }))
+                        .sort((a, b) => b.r - a.r);
+  let rem = N - assigned;
+  for (let i = 0; rem > 0; i++, rem--) quotas[residuals[i % keys.length].k]++;
+  keys.forEach(k => { quotas[k] = Math.min(quotas[k], byArea[k].length); });
+  return shuffleArray(
+    keys.flatMap(k => shuffleArray(byArea[k]).slice(0, quotas[k]).map(q => shuffleOptions(q)))
+  );
+}
+
+const SS = {
+  "1.1":{bg:"#e8f5e9",color:"#1b5e20",icon:"🏢"},
+  "1.2":{bg:"#f1f8e9",color:"#33691e",icon:"🏗️"},
+  "1.3":{bg:"#e8f5e9",color:"#2e7d32",icon:"🏛️"},
+  "2.1":{bg:"#e3f2fd",color:"#0d47a1",icon:"📋"},
+  "2.2":{bg:"#e8eaf6",color:"#283593",icon:"📮"},
+  "2.3":{bg:"#fce4ec",color:"#880e4f",icon:"⚖️"},
+  "2.4":{bg:"#fff3e0",color:"#e65100",icon:"⭐"},
+  "2.5":{bg:"#f3e5f5",color:"#4a148c",icon:"🗳️"},
+  "3.1":{bg:"#ffebee",color:"#b71c1c",icon:"🚫"},
+  "3.2":{bg:"#fff8e1",color:"#f57f17",icon:"📜"},
+  "3.3":{bg:"#fce4ec",color:"#c2185b",icon:"♀️"},
+  "4.1":{bg:"#e0f2f1",color:"#004d40",icon:"👁️"},
+  "4.2":{bg:"#e8f5e9",color:"#1b5e20",icon:"🗂️"},
+  "4.3":{bg:"#f3e5f5",color:"#6a1b9a",icon:"📦"},
+  "5.1":{bg:"#e8eaf6",color:"#1a237e",icon:"📁"},
+  "5.2":{bg:"#e1f5fe",color:"#01579b",icon:"📊"}
+};
+
+function inicializarSimulacro() {
+  document.getElementById('loadingScreen').classList.add('hidden');
+  document.getElementById('startScreen').classList.remove('hidden');
+  document.getElementById('navTotal').textContent = CONFIG.N_PREGUNTAS;
+  document.getElementById('infoPreguntas').textContent = CONFIG.N_PREGUNTAS;
+  document.getElementById('infoMinutos').textContent = CONFIG.TIEMPO_MIN;
+  document.getElementById('timer').textContent = String(CONFIG.TIEMPO_MIN).padStart(2,'0') + ':00';
+}
+
+function startExam() {
+  if (timerInterval) clearInterval(timerInterval);
+  if (!BANK || BANK.length === 0) { alert("El banco no está cargado. Recarga la página."); return; }
+  Q = buildQ();
+  answers     = new Array(Q.length).fill(null);
+  revealed    = new Array(Q.length).fill(false);
+  current     = 0;
+  secondsLeft = CONFIG.TIEMPO_MIN * 60;
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('examScreen').classList.remove('hidden');
+  document.getElementById('navBar').classList.remove('hidden');
+  document.getElementById('resultsScreen').classList.add('hidden');
+  renderQuestion(0);
+  startTimer();
+}
+
+function renderQuestion(idx) {
+  current = idx;
+  const q = Q[idx], sc = SS[q.sa] || {bg:"#e8f5e9",color:"#1b5e20",icon:"📌"};
+  const isR = revealed[idx], sel = answers[idx];
+  let ph = '';
+  if (q.p) ph = `<div class="passage"><div class="passage-label">📄 ${q.pt}</div>${q.p.replace(/\n/g,'<br>')}</div>`;
+  const L = ['A','B','C'];
+  const opts = q.o.map((o, i) => {
+    let cls = 'option';
+    if (isR) { cls += ' disabled'; if (i === q.c) cls += ' correct'; else if (i === sel && i !== q.c) cls += ' incorrect'; }
+    else if (i === sel) cls += ' selected';
+    return `<div class="${cls}" onclick="selOpt(${idx},${i})"><div class="option-letter">${L[i]}</div><div>${o}</div></div>`;
+  }).join('');
+  const ri = isR ? (sel === q.c ? '✅ Correcto' : sel === null ? '⏭️ Sin responder' : '❌ Incorrecto') : '';
+  document.getElementById('examScreen').innerHTML = `
+    <div class="question-card">
+      <div class="q-meta">
+        <span class="q-badge" style="background:${sc.bg};color:${sc.color}">${sc.icon} ${q.sal}</span>
+        <span class="q-num">${idx+1}/${Q.length}</span>
+      </div>
+      ${ph}
+      <div class="question-text">${q.q}</div>
+      <div class="options">${opts}</div>
+      <div class="explanation ${isR?'show':''}"><strong>${ri}${ri?' — ':''}Explicación:</strong> ${q.ex}</div>
+    </div>
+    ${!isR && answers[idx] !== null ? `<div style="text-align:center;margin-bottom:10px"><button class="btn btn-secondary" onclick="rev(${idx})">Ver explicación</button></div>` : ''}
+  `;
+  document.getElementById('progressBar').style.width = ((idx+1)/Q.length*100) + '%';
+  document.getElementById('navCurrent').textContent = idx + 1;
+  document.getElementById('navTotal').textContent   = Q.length;
+  document.getElementById('btnPrev').disabled = idx === 0;
+  document.getElementById('btnNext').textContent = idx === Q.length-1 ? 'Ver diagnóstico 🏁' : 'Siguiente →';
+  window.scrollTo(0, 0);
+}
+
+function selOpt(qi, oi) { if (revealed[qi]) return; answers[qi] = oi; renderQuestion(qi); }
+function rev(idx) { revealed[idx] = true; renderQuestion(idx); }
+function nextQ() { if (current < Q.length-1) renderQuestion(current+1); else showResults(); }
+function prevQ() { if (current > 0) renderQuestion(current-1); }
+
+function startTimer() {
+  timerInterval = setInterval(() => {
+    secondsLeft--;
+    const m = Math.floor(secondsLeft/60).toString().padStart(2,'0');
+    const s = (secondsLeft%60).toString().padStart(2,'0');
+    const el = document.getElementById('timer');
+    if (!el) return;
+    el.textContent = `${m}:${s}`;
+    el.className = 'timer' + (secondsLeft < 300 ? ' danger' : secondsLeft < 600 ? ' warning' : '');
+    if (secondsLeft <= 0) { clearInterval(timerInterval); showResults(); }
+  }, 1000);
+}
+
+function showResults() {
+  clearInterval(timerInterval);
+  document.getElementById('examScreen').classList.add('hidden');
+  document.getElementById('navBar').classList.add('hidden');
+  const total = Q.length, answered = answers.filter(a => a !== null).length;
+  const correct = answers.filter((a,i) => a === Q[i].c).length;
+  const wrong = answered - correct, skipped = total - answered;
+  const pct = Math.round(correct / total * 100);
+  const areas = {}, subs = {};
+  Q.forEach((q,i) => {
+    if (!areas[q.area]) areas[q.area] = {total:0, correct:0};
+    areas[q.area].total++;
+    if (answers[i] === q.c) areas[q.area].correct++;
+    if (!subs[q.sa]) subs[q.sa] = {label:q.sal, total:0, correct:0};
+    subs[q.sa].total++;
+    if (answers[i] === q.c) subs[q.sa].correct++;
+  });
+  const weak = Object.entries(subs).filter(([,s]) => s.correct/s.total < 0.6).map(([,s]) => s.label);
+  const cc   = pct >= 70 ? 'score-good' : pct >= 50 ? 'score-mid' : 'score-low';
+  const msg  = pct >= 80 ? '¡Excelente! Dominas los conocimientos técnicos del cargo.'
+             : pct >= 60 ? 'Buen avance. Refuerza los temas operativos señalados.'
+             : 'Diagnóstico listo. Enfócate en las áreas marcadas antes del examen.';
+  const areaColors = {"Estructura del INE":"#1b5e20","Proceso electoral":"#0d47a1","Justicia electoral":"#b71c1c","Organización de la elección":"#4a148c","Resultados y declaración de validez":"#01579b"};
+  const rows = Object.entries(areas).map(([name,a]) => {
+    const p = Math.round(a.correct/a.total*100);
+    const icon = p>=80?'✅':p>=60?'⚠️':'❌';
+    const bc = p>=60?`linear-gradient(90deg,${areaColors[name]||'#1b5e20'},#43a047)`:'linear-gradient(90deg,#c62828,#ef5350)';
+    return `<div class="area-row"><div class="area-name">${icon} ${name}</div><div class="area-bar-wrap"><div class="area-bar" style="width:${p}%;background:${bc}"></div></div><div class="area-pct" style="color:${p>=60?'#1b5e20':'#c62828'}">${p}%</div></div>`;
+  }).join('');
+  const wb = weak.length ? `<div class="weak-banner"><h4>🎯 Estudia esto primero:</h4><p>Menos del 60% en estas subáreas. Son las más operativas del cargo.</p><div class="weak-tags">${weak.map(t=>`<span class="weak-tag">📌 ${t}</span>`).join('')}</div></div>` : `<div style="background:#e8f5e9;border-radius:10px;padding:14px;margin:14px 0;color:#1b5e20;font-weight:600">✅ ¡Dominas todas las áreas técnicas del cargo!</div>`;
+  const elapsed = Math.max(0, CONFIG.TIEMPO_MIN * 60 - secondsLeft);
+  const tm = Math.floor(elapsed/60), ts = elapsed%60;
+  document.getElementById('resultsScreen').innerHTML = `
+    <div class="results-screen">
+      <div style="background:#e8f5e9;border-radius:10px;padding:9px 14px;margin-bottom:18px;font-size:0.82rem;color:#1b5e20;font-weight:600">📋 DIAGNÓSTICO MÓDULO D — ${new Date().toLocaleDateString('es-MX')}</div>
+      <div class="score-circle ${cc}">${pct}%<div class="score-sub">${correct}/${total}</div></div>
+      <h2 style="margin-bottom:8px">${msg}</h2>
+      <p style="margin-bottom:20px;color:#777;font-size:0.85rem">Tiempo: ${tm}m ${ts}s · Respondidas: ${answered}/${total}</p>
+      <div class="stats-grid">
+        <div class="stat-card stat-correct"><div class="n">${correct}</div><div class="l">✅ Correctas</div></div>
+        <div class="stat-card stat-wrong"><div class="n">${wrong}</div><div class="l">❌ Incorrectas</div></div>
+        <div class="stat-card stat-skip"><div class="n">${skipped}</div><div class="l">⏭️ Saltadas</div></div>
+      </div>
+      ${wb}
+      <div style="text-align:left;margin-bottom:24px"><h3 style="font-size:0.9rem;font-weight:700;color:#444;margin-bottom:10px">Desempeño por área</h3>${rows}</div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-primary btn-lg" onclick="reviewExam()">Revisar con explicaciones</button>
+        <button class="btn btn-secondary btn-lg" onclick="startExam()">🔀 Nuevo diagnóstico</button>
+      </div>
+      <p style="font-size:0.72rem;color:#aaa;margin-top:16px;text-align:center">📚 LGIPE (2024) · Reglamento de Elecciones INE (2025) · LGMDE (2021) · CPEUM (2025)</p>
+    </div>
+  `;
+  document.getElementById('resultsScreen').classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+
+function reviewExam() {
+  document.getElementById('resultsScreen').classList.add('hidden');
+  document.getElementById('examScreen').classList.remove('hidden');
+  document.getElementById('navBar').classList.remove('hidden');
+  revealed = revealed.map(() => true);
+  renderQuestion(0);
+  window.scrollTo(0, 0);
+}
+
+cargarBanco();
+</script>
+</body>
+</html>
